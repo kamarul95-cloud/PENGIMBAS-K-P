@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pengimbas Dokumen Pintar</title>
+  
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    :root {
+      --primary: #059669; /* Emerald Green */
+      --dark: #111827;
+      --bg: #1f2937;
+      --text: #f9fafb;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Top Navigation */
+    .header {
+      width: 100%;
+      background-color: var(--dark);
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      position: relative;
+      z-index: 10;
+    }
+
+    /* Step Indicator */
+    .steps {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .step-badge {
+      background: #374151;
+      color: #9ca3af;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+    .step-badge.active { background: var(--primary); color: white; box-shadow: 0 0 10px rgba(5,150,105,0.5); }
+    .step-badge.done { background: #047857; color: #a7f3d0; }
+
+    /* Camera Viewport */
+    .scanner-container {
+      position: relative;
+      width: 90vw;
+      max-width: 500px;
+      aspect-ratio: 3/4;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    #camera {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Smart Overlay (Lubang IC) */
+    .overlay-mask {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      pointer-events: none;
+      /* Membina lubang lutsinar menggunakan clip-path */
+      clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 
+                 5% 35%, 95% 35%, 95% 65%, 5% 65%, 5% 35%);
+    }
+
+    .overlay-border {
+      position: absolute;
+      top: 35%;
+      left: 5%;
+      width: 90%;
+      height: 30%; /* Aspect ratio lebih kurang kad fizikal */
+      border: 2px dashed #34d399;
+      border-radius: 8px;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2);
+    }
+    
+    .guide-text {
+      position: absolute;
+      bottom: -30px;
+      width: 100%;
+      text-align: center;
+      color: #34d399;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 500px;
+      margin-top: 20px;
+      padding: 0 20px;
+      gap: 15px;
+    }
+
+    .btn-capture {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: white;
+      border: 5px solid #d1d5db;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      transition: 0.2s;
+    }
+    .btn-capture:active { transform: scale(0.9); background: #f3f4f6; }
+
+    .action-row {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .btn-small {
+      background: #374151;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-upload {
+      background: var(--primary);
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      display: none;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Preview Images */
+    .preview-container {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .preview-box {
+      flex: 1;
+      background: #111827;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      aspect-ratio: 1.58;
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      font-size: 0.8rem;
+      overflow: hidden;
+    }
+
+    /* Result Panel */
+    .result-panel {
+      background: #111827;
+      border: 1px solid var(--primary);
+      padding: 20px;
+      border-radius: 12px;
+      width: 90vw;
+      max-width: 500px;
+      margin-top: 20px;
+      display: none;
+      text-align: center;
+    }
+    .url-box {
+      display: flex;
+      margin-top: 15px;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .url-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #10b981;
+      padding: 12px;
+      font-family: monospace;
+      outline: none;
+    }
+    .url-box button {
+      background: var(--primary);
+      border: none;
+      color: white;
+      padding: 0 20px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    
+    /* Hidden Canvases */
+    #tempCanvas, #finalCanvas { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h3 style="margin:0;"><i class="fas fa-id-card"></i> Sistem e-KYC (Kamera)</h3>
+  </div>
+
+  <div class="steps">
+    <div class="step-badge active" id="badge-1">1. Depan</div>
+    <div class="step-badge" id="badge-2">2. Belakang</div>
+    <div class="step-badge" id="badge-3">3. Siap</div>
+  </div>
+
+  <div class="scanner-container" id="scannerUI">
+    <video id="camera" autoplay playsinline></video>
+    <div class="overlay-mask"></div>
+    <div class="overlay-border">
+      <div class="guide-text" id="guideText">Posisikan Bahagian DEPAN IC</div>
+    </div>
+  </div>
+
+  <div class="controls" id="controlUI">
+    <button class="btn-capture" id="captureBtn" onclick="snapPhoto()"></button>
+    
+    <div class="action-row">
+      <button class="btn-small" onclick="retake()"><i class="fas fa-redo"></i> Mula Semula</button>
+      <button class="btn-small" onclick="switchCamera()"><i class="fas fa-sync-alt"></i> Pusing Kamera</button>
+    </div>
+
+    <div class="preview-container">
+      <div class="preview-box" id="prev-front">Depan Kosong</div>
+      <div class="preview-box" id="prev-back">Belakang Kosong</div>
+    </div>
+
+    <button class="btn-upload" id="uploadBtn" onclick="processAndUpload()">
+      <i class="fas fa-cloud-upload-alt"></i> Gabung & Upload
+    </button>
+  </div>
+
+  <div class="result-panel" id="resultUI">
+    <i class="fas fa-check-circle" style="font-size: 3rem; color: #10b981;"></i>
+    <h3 style="margin: 10px 0;">Muat Naik Berjaya!</h3>
+    <p style="font-size: 0.9rem; color: #9ca3af;">Sila salin pautan di bawah dan tampalkan ke dalam Borang Pendaftaran.</p>
+    
+    <div class="url-box">
+      <input type="text" id="finalUrl" readonly>
+      <button onclick="copyToClipboard()"><i class="fas fa-copy"></i> Salin</button>
+    </div>
+    
+    <button class="btn-small" style="margin: 20px auto 0;" onclick="window.close()">Tutup Tetingkap</button>
+  </div>
+
+  <canvas id="tempCanvas"></canvas>
+  <canvas id="finalCanvas"></canvas>
+
+  <script>
+    let stream;
+    let facingMode = "environment"; 
+    let currentStep = 1; // 1 = Depan, 2 = Belakang
+    let imgFront = null;
+    let imgBack = null;
+
+    // --- On Load ---
+    document.addEventListener("DOMContentLoaded", () => {
+      startCamera();
+      Swal.fire({
+        title: 'Panduan e-KYC',
+        html: 'Pastikan IC anda berada dalam <b>kotak hijau</b> dan bebas dari pantulan cahaya (silau).',
+        icon: 'info',
+        confirmButtonColor: '#059669',
+        confirmButtonText: 'Faham, Mula'
+      });
+    });
+
+    async function startCamera() {
+      try {
+        if (stream) stream.getTracks().forEach(track => track.stop());
+        stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } } 
+        });
+        document.getElementById('camera').srcObject = stream;
+      } catch (err) {
+        Swal.fire('Ralat Kamera', 'Sila berikan kebenaran (permission) untuk menggunakan kamera.', 'error');
+      }
+    }
+
+    function switchCamera() {
+      facingMode = facingMode === "environment" ? "user" : "environment";
+      startCamera();
+    }
+
+    function snapPhoto() {
+      const video = document.getElementById('camera');
+      const canvas = document.getElementById('tempCanvas');
+      const ctx = canvas.getContext('2d');
+      
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (vw === 0 || vh === 0) return;
+
+      // Logik Cropping Tengah (Center Crop) Pintar
+      // Kertas IC Aspect Ratio: ~1.58 (85.6mm / 54mm)
+      const icRatio = 1.58; 
+      
+      // Berapa besar kita nak potong dari resolusi asal video?
+      // Katakan 80% dari lebar video asal
+      let cropWidth = vw * 0.8;
+      let cropHeight = cropWidth / icRatio;
+
+      // Safety check (kalau potrait mode)
+      if (cropHeight > vh * 0.8) {
+          cropHeight = vh * 0.8;
+          cropWidth = cropHeight * icRatio;
+      }
+
+      // Cari Center Point
+      const startX = (vw - cropWidth) / 2;
+      const startY = (vh - cropHeight) / 2;
+
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+      
+      // Ambil pixel dari video (Center)
+      ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+      
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+      if (currentStep === 1) {
+        imgFront = dataUrl;
+        document.getElementById('prev-front').style.backgroundImage = `url(${imgFront})`;
+        document.getElementById('prev-front').innerText = "";
+        
+        currentStep = 2;
+        document.getElementById('badge-1').classList.replace('active', 'done');
+        document.getElementById('badge-2').classList.add('active');
+        document.getElementById('guideText').innerText = "Posisikan Bahagian BELAKANG IC";
+        
+      } else if (currentStep === 2) {
+        imgBack = dataUrl;
+        document.getElementById('prev-back').style.backgroundImage = `url(${imgBack})`;
+        document.getElementById('prev-back').innerText = "";
+        
+        document.getElementById('badge-2').classList.replace('active', 'done');
+        document.getElementById('badge-3').classList.add('active');
+        document.getElementById('guideText').innerText = "Semak Gambar Anda";
+        
+        // Hide Capture, Show Upload
+        document.getElementById('captureBtn').style.display = "none";
+        document.getElementById('uploadBtn').style.display = "block";
+      }
+
+      // Haptic Feedback (Vibrate jika handphone support)
+      if (navigator.vibrate) navigator.vibrate(50);
+    }
+
+    function retake() {
+      currentStep = 1;
+      imgFront = null; imgBack = null;
+      document.getElementById('prev-front').style.backgroundImage = "none";
+      document.getElementById('prev-back').style.backgroundImage = "none";
+      document.getElementById('prev-front').innerText = "Depan Kosong";
+      document.getElementById('prev-back').innerText = "Belakang Kosong";
+      
+      document.getElementById('badge-1').className = "step-badge active";
+      document.getElementById('badge-2').className = "step-badge";
+      document.getElementById('badge-3').className = "step-badge";
+      
+      document.getElementById('guideText').innerText = "Posisikan Bahagian DEPAN IC";
+      document.getElementById('captureBtn').style.display = "block";
+      document.getElementById('uploadBtn').style.display = "none";
+    }
+
+    function processAndUpload() {
+      if (!imgFront || !imgBack) return;
+      
+      Swal.fire({
+        title: 'Memproses...',
+        html: 'Menyatukan gambar & memuat naik ke pelayan (Cloud).<br>Sila tunggu.',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+      });
+
+      const iFront = new Image(); iFront.src = imgFront;
+      const iBack = new Image(); iBack.src = imgBack;
+
+      iFront.onload = () => {
+        iBack.onload = () => {
+          const canvas = document.getElementById('finalCanvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Saiz sesuai untuk cetakan A4 (Lebar fix 800px)
+          const finalWidth = 800;
+          const scale = finalWidth / iFront.width;
+          const finalHeightSingle = iFront.height * scale;
+
+          // Kanvas menegak (Front atas, Back Bawah)
+          canvas.width = finalWidth;
+          canvas.height = (finalHeightSingle * 2) + 50; 
+
+          // Background Putih Kertas
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Draw
+          ctx.drawImage(iFront, 0, 0, finalWidth, finalHeightSingle);
+          ctx.drawImage(iBack, 0, finalHeightSingle + 20, finalWidth, finalHeightSingle);
+
+          uploadToImgBB(canvas.toDataURL('image/jpeg', 0.9));
+        }
+      }
+    }
+
+    function uploadToImgBB(base64Image) {
+      const cleanBase64 = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+      const formData = new FormData();
+      formData.append("image", cleanBase64);
+
+      // Guna API KEY Bos (Sila kekalkan kerahsiaan)
+      fetch('https://api.imgbb.com/1/upload?key=6b09e2ede4edffb50fd81e97070a1028', {
+          method: 'POST',
+          body: formData
+      })
+      .then(res => res.json())
+      .then(result => {
+          if (result.success) {
+              Swal.close();
+              
+              // Tutup Kamera untuk jimat bateri
+              if (stream) stream.getTracks().forEach(track => track.stop());
+              
+              document.getElementById('scannerUI').style.display = "none";
+              document.getElementById('controlUI').style.display = "none";
+              document.getElementById('resultUI').style.display = "block";
+              
+              document.getElementById('finalUrl').value = result.data.url;
+          } else {
+              Swal.fire('Ralat Upload', result.status, 'error');
+          }
+      })
+      .catch(err => {
+          Swal.fire('Ralat Internet', 'Gagal menghubungi server ImgBB.', 'error');
+      });
+    }
+
+    function copyToClipboard() {
+      const urlBox = document.getElementById('finalUrl');
+      urlBox.select();
+      navigator.clipboard.writeText(urlBox.value);
+      
+      Swal.fire({
+        toast: true, position: 'top', showConfirmButton: false, timer: 2000,
+        icon: 'success', title: 'Pautan Berjaya Disalin!'
+      });
+    }
+  </script>
+</body>
+</html>
