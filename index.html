@@ -394,12 +394,12 @@
       document.getElementById('uploadBtn').style.display = "none";
     }
 
-    function processAndUpload() {
+function processAndUpload() {
       if (!imgFront || !imgBack) return;
       
       Swal.fire({
-        title: 'Memproses...',
-        html: 'Menyatukan gambar & memuat naik ke pelayan (Cloud).',
+        title: 'Memproses Mesin Photostat...',
+        html: 'Menjana susunan saiz A4 sebenar & memuat naik ke pelayan.',
         allowOutsideClick: false,
         didOpen: () => { Swal.showLoading(); }
       });
@@ -412,20 +412,36 @@
           const canvas = document.getElementById('finalCanvas');
           const ctx = canvas.getContext('2d');
           
-          const finalWidth = 800;
-          const scale = finalWidth / iFront.width;
-          const finalHeightSingle = iFront.height * scale;
+          // 1. SETUP KERTAS A4 (Kita guna lebar 1200px untuk resolusi HD yang cantik tapi tak berat)
+          const a4Width = 1200;
+          const a4Height = Math.round(a4Width * (297 / 210)); // 1697px (Kiraan nisbah kertas A4 sebenar)
 
-          canvas.width = finalWidth;
-          canvas.height = (finalHeightSingle * 2) + 50; 
+          canvas.width = a4Width;
+          canvas.height = a4Height;
 
+          // 2. BACKGROUND PUTIH (Warna kertas)
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          ctx.drawImage(iFront, 0, 0, finalWidth, finalHeightSingle);
-          ctx.drawImage(iBack, 0, finalHeightSingle + 20, finalWidth, finalHeightSingle);
+          // 3. KIRA SAIZ IC SEBENAR DI ATAS A4
+          // Lebar IC = 85.6mm, Lebar A4 = 210mm (IC ambil ~40.7% lebar A4)
+          const icDrawWidth = a4Width * (85.6 / 210); 
+          const icDrawHeight = icDrawWidth / (85.6 / 54); // Nisbah IC 1.585
 
-          uploadToImgBB(canvas.toDataURL('image/jpeg', 0.9));
+          // 4. SUSUN POSISI (Tengah, dengan jarak atas & bawah yang logik)
+          const posX = (a4Width - icDrawWidth) / 2; // Center melintang
+          
+          // Posisi menegak (Macam susunan kedai photostat)
+          const posY_Front = a4Height * 0.15; // Jarak 15% dari atas kertas
+          const posY_Back = a4Height * 0.55;  // Jarak 55% dari atas (Gap besar di tengah)
+
+          // 5. LUKIS DALAM KANVAS A4
+          ctx.drawImage(iFront, posX, posY_Front, icDrawWidth, icDrawHeight);
+          ctx.drawImage(iBack, posX, posY_Back, icDrawWidth, icDrawHeight);
+
+          // 6. UPLOAD KE IMGBB
+          // Guna kualiti 0.85 supaya fail tajam tapi tak terlalu berat untuk API
+          uploadToImgBB(canvas.toDataURL('image/jpeg', 0.85)); 
         }
       }
     }
