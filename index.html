@@ -11,7 +11,7 @@
 
   <style>
     :root {
-      --primary: #059669; /* Emerald Green */
+      --primary: #059669; 
       --dark: #111827;
       --bg: #1f2937;
       --text: #f9fafb;
@@ -26,9 +26,9 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
-    /* Top Navigation */
     .header {
       width: 100%;
       background-color: var(--dark);
@@ -39,7 +39,6 @@
       z-index: 10;
     }
 
-    /* Step Indicator */
     .steps {
       display: flex;
       justify-content: center;
@@ -58,14 +57,13 @@
     .step-badge.active { background: var(--primary); color: white; box-shadow: 0 0 10px rgba(5,150,105,0.5); }
     .step-badge.done { background: #047857; color: #a7f3d0; }
 
-    /* Camera Viewport */
+    /* --- UI KAMERA YANG BARU (FIX SAIZ IC) --- */
     .scanner-container {
       position: relative;
-      width: 90vw;
+      width: 100%;
       max-width: 500px;
-      aspect-ratio: 3/4;
+      height: 60vh; /* Ketinggian dinamik ikut skrin fon */
       background: #000;
-      border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
@@ -73,47 +71,39 @@
     #camera {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: cover; /* Penuhkan skrin tanpa herot */
     }
 
-    /* Smart Overlay (Lubang IC) */
-    .overlay-mask {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      pointer-events: none;
-      /* Membina lubang lutsinar menggunakan clip-path */
-      clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 
-                 5% 35%, 95% 35%, 95% 65%, 5% 65%, 5% 35%);
-    }
-
+    /* Kotak Panduan Ngam-Ngam Saiz IC Moden */
     .overlay-border {
       position: absolute;
-      top: 35%;
-      left: 5%;
-      width: 90%;
-      height: 30%; /* Aspect ratio lebih kurang kad fizikal */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 85%; /* Lebar kotak panduan */
+      aspect-ratio: 85.6 / 54; /* NISBAH SEBENAR MYKAD */
       border: 2px dashed #34d399;
-      border-radius: 8px;
+      border-radius: 10px;
+      /* MAGIC: Box-shadow yang menggelapkan kawasan luar kotak */
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.75); 
       pointer-events: none;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2);
     }
     
     .guide-text {
       position: absolute;
-      bottom: -30px;
+      bottom: -40px;
       width: 100%;
       text-align: center;
       color: #34d399;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
       text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      white-space: nowrap;
     }
 
-    /* Controls */
     .controls {
       display: flex;
       flex-direction: column;
@@ -171,7 +161,6 @@
       letter-spacing: 1px;
     }
 
-    /* Preview Images */
     .preview-container {
       display: flex;
       gap: 10px;
@@ -191,10 +180,8 @@
       justify-content: center;
       color: #6b7280;
       font-size: 0.8rem;
-      overflow: hidden;
     }
 
-    /* Result Panel */
     .result-panel {
       background: #111827;
       border: 1px solid var(--primary);
@@ -232,7 +219,6 @@
       cursor: pointer;
     }
     
-    /* Hidden Canvases */
     #tempCanvas, #finalCanvas { display: none; }
   </style>
 </head>
@@ -250,9 +236,8 @@
 
   <div class="scanner-container" id="scannerUI">
     <video id="camera" autoplay playsinline></video>
-    <div class="overlay-mask"></div>
     <div class="overlay-border">
-      <div class="guide-text" id="guideText">Posisikan Bahagian DEPAN IC</div>
+      <div class="guide-text" id="guideText">Posisikan Bahagian DEPAN IC di sini</div>
     </div>
   </div>
 
@@ -261,7 +246,7 @@
     
     <div class="action-row">
       <button class="btn-small" onclick="retake()"><i class="fas fa-redo"></i> Mula Semula</button>
-      <button class="btn-small" onclick="switchCamera()"><i class="fas fa-sync-alt"></i> Pusing Kamera</button>
+      <button class="btn-small" onclick="switchCamera()"><i class="fas fa-sync-alt"></i> Tukar Kamera</button>
     </div>
 
     <div class="preview-container">
@@ -293,16 +278,15 @@
   <script>
     let stream;
     let facingMode = "environment"; 
-    let currentStep = 1; // 1 = Depan, 2 = Belakang
+    let currentStep = 1;
     let imgFront = null;
     let imgBack = null;
 
-    // --- On Load ---
     document.addEventListener("DOMContentLoaded", () => {
       startCamera();
       Swal.fire({
         title: 'Panduan e-KYC',
-        html: 'Pastikan IC anda berada dalam <b>kotak hijau</b> dan bebas dari pantulan cahaya (silau).',
+        html: 'Pastikan IC anda berada <b>tepat di dalam kotak hijau</b>.',
         icon: 'info',
         confirmButtonColor: '#059669',
         confirmButtonText: 'Faham, Mula'
@@ -335,29 +319,34 @@
       const vh = video.videoHeight;
       if (vw === 0 || vh === 0) return;
 
-      // Logik Cropping Tengah (Center Crop) Pintar
-      // Kertas IC Aspect Ratio: ~1.58 (85.6mm / 54mm)
-      const icRatio = 1.58; 
+      // Kertas IC Aspect Ratio: 85.6 / 54 = 1.585
+      const icRatio = 85.6 / 54; 
       
-      // Berapa besar kita nak potong dari resolusi asal video?
-      // Katakan 80% dari lebar video asal
-      let cropWidth = vw * 0.8;
-      let cropHeight = cropWidth / icRatio;
-
-      // Safety check (kalau potrait mode)
-      if (cropHeight > vh * 0.8) {
-          cropHeight = vh * 0.8;
-          cropWidth = cropHeight * icRatio;
+      // Oleh kerana UI kita set overlay width kepada 85% skrin...
+      // Kita potong bahagian tengah video berdasarkan nisbah sebenar
+      let cropWidth, cropHeight;
+      
+      if (vw < vh) { 
+        // Orientasi Potret (Telefon berdiri)
+        cropWidth = vw * 0.85; 
+        cropHeight = cropWidth / icRatio;
+      } else {
+        // Orientasi Melintang
+        cropHeight = vh * 0.6;
+        cropWidth = cropHeight * icRatio;
       }
 
-      // Cari Center Point
+      // Pastikan tak terkeluar sempadan video
+      if (cropWidth > vw) { cropWidth = vw; cropHeight = cropWidth / icRatio; }
+      if (cropHeight > vh) { cropHeight = vh; cropWidth = cropHeight * icRatio; }
+
+      // Titik Tengah
       const startX = (vw - cropWidth) / 2;
       const startY = (vh - cropHeight) / 2;
 
       canvas.width = cropWidth;
       canvas.height = cropHeight;
       
-      // Ambil pixel dari video (Center)
       ctx.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
       
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
@@ -370,7 +359,7 @@
         currentStep = 2;
         document.getElementById('badge-1').classList.replace('active', 'done');
         document.getElementById('badge-2').classList.add('active');
-        document.getElementById('guideText').innerText = "Posisikan Bahagian BELAKANG IC";
+        document.getElementById('guideText').innerText = "Posisikan Bahagian BELAKANG IC pula";
         
       } else if (currentStep === 2) {
         imgBack = dataUrl;
@@ -379,14 +368,12 @@
         
         document.getElementById('badge-2').classList.replace('active', 'done');
         document.getElementById('badge-3').classList.add('active');
-        document.getElementById('guideText').innerText = "Semak Gambar Anda";
+        document.getElementById('guideText').innerText = "Semak Gambar & Muat Naik";
         
-        // Hide Capture, Show Upload
         document.getElementById('captureBtn').style.display = "none";
         document.getElementById('uploadBtn').style.display = "block";
       }
 
-      // Haptic Feedback (Vibrate jika handphone support)
       if (navigator.vibrate) navigator.vibrate(50);
     }
 
@@ -402,7 +389,7 @@
       document.getElementById('badge-2').className = "step-badge";
       document.getElementById('badge-3').className = "step-badge";
       
-      document.getElementById('guideText').innerText = "Posisikan Bahagian DEPAN IC";
+      document.getElementById('guideText').innerText = "Posisikan Bahagian DEPAN IC di sini";
       document.getElementById('captureBtn').style.display = "block";
       document.getElementById('uploadBtn').style.display = "none";
     }
@@ -412,7 +399,7 @@
       
       Swal.fire({
         title: 'Memproses...',
-        html: 'Menyatukan gambar & memuat naik ke pelayan (Cloud).<br>Sila tunggu.',
+        html: 'Menyatukan gambar & memuat naik ke pelayan (Cloud).',
         allowOutsideClick: false,
         didOpen: () => { Swal.showLoading(); }
       });
@@ -425,20 +412,16 @@
           const canvas = document.getElementById('finalCanvas');
           const ctx = canvas.getContext('2d');
           
-          // Saiz sesuai untuk cetakan A4 (Lebar fix 800px)
           const finalWidth = 800;
           const scale = finalWidth / iFront.width;
           const finalHeightSingle = iFront.height * scale;
 
-          // Kanvas menegak (Front atas, Back Bawah)
           canvas.width = finalWidth;
           canvas.height = (finalHeightSingle * 2) + 50; 
 
-          // Background Putih Kertas
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          // Draw
           ctx.drawImage(iFront, 0, 0, finalWidth, finalHeightSingle);
           ctx.drawImage(iBack, 0, finalHeightSingle + 20, finalWidth, finalHeightSingle);
 
@@ -452,7 +435,6 @@
       const formData = new FormData();
       formData.append("image", cleanBase64);
 
-      // Guna API KEY Bos (Sila kekalkan kerahsiaan)
       fetch('https://api.imgbb.com/1/upload?key=6b09e2ede4edffb50fd81e97070a1028', {
           method: 'POST',
           body: formData
@@ -461,8 +443,6 @@
       .then(result => {
           if (result.success) {
               Swal.close();
-              
-              // Tutup Kamera untuk jimat bateri
               if (stream) stream.getTracks().forEach(track => track.stop());
               
               document.getElementById('scannerUI').style.display = "none";
